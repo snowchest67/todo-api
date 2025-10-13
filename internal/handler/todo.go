@@ -25,6 +25,17 @@ func TodosHandler(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func TodoByIDHandler(w http.ResponseWriter, r *http.Request) {
+    switch r.Method {
+    case http.MethodGet:
+        getTodoByID(w, r)
+    case http.MethodDelete:
+        deleteTodo(w, r)
+    default:
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+    }
+}
+
 
 func getTodos(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, todos)
@@ -51,7 +62,7 @@ func createTodo(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, todo)
 }
 
-func GetTodoByIDHandler(w http.ResponseWriter, r *http.Request) {
+func getTodoByID(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) != 3 {
 		http.Error(w, "Incorrect number of elements in the request", http.StatusBadRequest)
@@ -72,3 +83,29 @@ func GetTodoByIDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Error(w, "Todo not found", http.StatusNotFound)
 }
+
+func deleteTodo(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) != 3 {
+		http.Error(w, "Incorrect number of elements in the request", http.StatusBadRequest)
+		return
+	}
+
+	idStr := parts[2]
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	for i, todo := range todos {
+		if todo.ID == id {
+			todos = append(todos[:i], todos[i+1:]...)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
+	http.Error(w, "Todo not found", http.StatusNotFound)
+}
+

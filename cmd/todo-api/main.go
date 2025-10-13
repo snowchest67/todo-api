@@ -15,7 +15,7 @@ func main() {
 
 	http.HandleFunc("/todos", handler.TodosHandler)
 
-	http.HandleFunc("/todos/", handler.GetTodoByIDHandler)
+	http.HandleFunc("/todos/", handler.TodoByIDHandler)
 
 	http.ListenAndServe(":8080", nil)
 }
