@@ -13,5 +13,9 @@ func main() {
 
 	http.HandleFunc("/health", handler.HealthHandler)
 
+	http.HandleFunc("/todos", handler.TodosHandler)
+
+	http.HandleFunc("/todos/", handler.GetTodoByIDHandler)
+
 	http.ListenAndServe(":8080", nil)
 }
