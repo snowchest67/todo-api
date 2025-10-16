@@ -7,41 +7,52 @@ import (
 	"strings"
 
 	"github.com/snowchest67/todo-api/internal/model"
+	"github.com/snowchest67/todo-api/internal/repository"
 )
 
-var (
-	todos   []model.Todo
-	nextID  = 1
-)
+type TodoHandler struct {
+    repo repository.TodoRepository
+}
 
-func TodosHandler(w http.ResponseWriter, r *http.Request) {
-    switch r.Method {
-    case http.MethodGet:
-        getTodos(w, r)
-    case http.MethodPost:
-        createTodo(w, r)
-    default:
-        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+func NewTodoHandler(repo *repository.PostgresRepo) *TodoHandler {
+    return &TodoHandler{repo: repo}
+}
+
+func (h *TodoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    if r.URL.Path == "/todos" {
+
+        switch r.Method {
+        case http.MethodGet:
+            h.getTodos(w, r)
+        case http.MethodPost:
+            h.createTodo(w, r)
+        default:
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        }
+    } else if strings.HasPrefix(r.URL.Path, "/todos/") {
+        switch r.Method {
+        case http.MethodGet:
+            h.getTodoByID(w, r)
+        case http.MethodDelete:
+            h.deleteTodo(w, r)
+        default:
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        }
+    } else {
+        http.NotFound(w, r)
     }
 }
 
-func TodoByIDHandler(w http.ResponseWriter, r *http.Request) {
-    switch r.Method {
-    case http.MethodGet:
-        getTodoByID(w, r)
-    case http.MethodDelete:
-        deleteTodo(w, r)
-    default:
-        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-    }
-}
 
-
-func getTodos(w http.ResponseWriter, r *http.Request) {
+func (h *TodoHandler) getTodos(w http.ResponseWriter, r *http.Request) {
+	todos, err := h.repo.GetAll(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 	sendJSON(w, todos)
 }
 
-func createTodo(w http.ResponseWriter, r *http.Request) {
+func (h *TodoHandler) createTodo(w http.ResponseWriter, r *http.Request) {
 
 	var req model.CreateTodoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -54,15 +65,18 @@ func createTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	todo := model.Todo{ID: nextID, Title: req.Title}
-	todos = append(todos, todo)
-	nextID++
+	id, err := h.repo.CreateTodo(r.Context(), req.Title)
+	if err != nil {
+		http.Error(w, "Failed to create todo", http.StatusInternalServerError)
+    return
+  }
 
-	w.WriteHeader(http.StatusCreated)
-	sendJSON(w, todo)
+	todo := model.Todo{ID: id, Title: req.Title}
+  w.WriteHeader(http.StatusCreated)
+  sendJSON(w, todo)
 }
 
-func getTodoByID(w http.ResponseWriter, r *http.Request) {
+func(h *TodoHandler) getTodoByID(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) != 3 {
 		http.Error(w, "Incorrect number of elements in the request", http.StatusBadRequest)
@@ -74,17 +88,21 @@ func getTodoByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
-	for _, todo := range todos {
-		if todo.ID == id {
-			w.WriteHeader(http.StatusOK)
-			sendJSON(w, todo)
-			return
-		}
+
+	todo, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return 
 	}
-	http.Error(w, "Todo not found", http.StatusNotFound)
+	if todo == nil {
+		http.Error(w, "Todo not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	sendJSON(w, todo)	
 }
 
-func deleteTodo(w http.ResponseWriter, r *http.Request) {
+func(h *TodoHandler) deleteTodo(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) != 3 {
 		http.Error(w, "Incorrect number of elements in the request", http.StatusBadRequest)
@@ -99,13 +117,11 @@ func deleteTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for i, todo := range todos {
-		if todo.ID == id {
-			todos = append(todos[:i], todos[i+1:]...)
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+	err = h.repo.DeleteByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	http.Error(w, "Todo not found", http.StatusNotFound)
+	w.WriteHeader(http.StatusNoContent)
 }
 
